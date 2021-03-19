@@ -11,7 +11,7 @@ helper 'dump_request' => sub {
 };
 
 helper 'pepper' => sub {
-    state $pepper = Pepper->new;
+    state $pepper = Pepper->new(log => $_[0]->app->log);
 };
 
 any '/handler' => sub {
@@ -19,9 +19,13 @@ any '/handler' => sub {
     my $body = $self->req->json;
 
     my $message = $body->{'message'};
-    $self->pepper->process($message);
-
-    $self->render(json => {});
+    my $result  = $self->pepper->process($message);
+    
+    my $response = {};
+    if (defined $result && !ref $result) {
+        $response->{'text'} = $result;
+    }
+    $self->render(json => $response);
 };
 
 app->start;

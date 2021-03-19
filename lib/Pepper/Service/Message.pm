@@ -5,6 +5,20 @@ use namespace::autoclean;
 
 use constant URL => 'https://chat.googleapis.com/v1';
 
+has request => (
+    is       => 'ro',
+    isa      => 'Pepper::Service::Request',
+    required => 1,
+    weak_ref => 1
+);
+
+has log => (
+    is       => 'rw',
+    isa      => 'Mojo::Log',
+    weak_ref => 1,
+    required => 1,
+);
+
 has text => (
     is       => 'rw',
     isa      => 'Str',
@@ -20,12 +34,6 @@ has raw_text => (
 has sender => (
     is       => 'rw',
     isa      => 'Str',
-    required => 1
-);
-
-has request => (
-    is       => 'ro',
-    isa      => 'Pepper::Service::Request',
     required => 1
 );
 

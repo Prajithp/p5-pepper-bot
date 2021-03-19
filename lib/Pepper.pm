@@ -30,6 +30,13 @@ has request => (
     lazy => 1
 );
 
+has log => (
+    is       => 'rw',
+    isa      => 'Mojo::Log',
+    default  => sub { Mojo::Log->new },
+    weak_ref => 1,
+);
+
 sub BUILD {
     my $self = shift;
 
@@ -49,6 +56,7 @@ sub process {
         $context = $1;
         $text    = $2;
     }
+
     $self->bot->context($context) if defined $context;
 
     my $space     = $message->{'space'}->{'name'};
@@ -57,6 +65,7 @@ sub process {
     my $thread_id = (split(/\//, $thread))[-1];
     
     my $message_obj = Pepper::Service::Message->new(
+        log       => $self->log,
         text      => $text, 
         raw_text  => $raw_text,
         sender    => $message->{'space'}->{'name'},
@@ -64,6 +73,7 @@ sub process {
         thread_id => $thread_id,
         request   => $self->request,
     );
+    $self->log->info("Processing incomming message");
     return $self->bot->process($message_obj);
 }
 
