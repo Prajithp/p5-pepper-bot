@@ -49,13 +49,6 @@ has thread_id => (
     predicate => 'has_thread_id'
 );
 
-sub text_reply {
-    my ( $self, $message ) = @_;
-    return $self->reply({
-        "text" => sprintf("```%s```", $message)
-    });
-}
-
 sub reply {
     my ( $self, $message ) = @_;
 

@@ -4,6 +4,8 @@ use Moose;
 use namespace::autoclean;
 use MooseX::ClassAttribute;
 use Module::Pluggable;
+use Data::Dumper;
+
 
 has bot => (
     is       => 'ro',
@@ -18,11 +20,20 @@ class_has 'registry' => (
     default => sub { +{} }
 );
 
-sub add {
+sub register_namespace {
+   my ( $class, $pkg, $key ) = @_;
+
+   my $registry = $class->registry;
+   $registry->{$pkg} //= {};
+   $registry->{$pkg}->{'namespace'} = $key; 
+}
+
+sub register_pattern {
     my ( $class, $pkg, $key, $param ) = @_;
 
     my $registry = $class->registry;
-    $registry->{$pkg}->{$key} = $param;
+    $registry->{$pkg} //= {};
+    $registry->{$pkg}->{'patterns'}->{$key} = $param;
 }
 
 sub load_plugins {
@@ -38,11 +49,15 @@ sub load_plugins {
     my @plugins = $self->plugins;
     foreach my $plugin_ref (@plugins) {
         my $plugin = ref $plugin_ref;
-        foreach my $reg ( keys $self->registry->{$plugin}->%* ) {
-            my $params = $self->registry->{$plugin}->{$reg};
+        my $plugin_obj = $self->registry->{$plugin};
+        
+        my $patterns   = $plugin_obj->{'patterns'};
+        my $context    = $plugin_obj->{'namespace'} // "";
+        
+        foreach my $key (keys $patterns->%*) {
+            my $params     = $patterns->{$key};
 
-            my $pattern    = $params->{'pattern'} // $reg;
-            my $context    = $params->{'context'} // "";
+            my $pattern    = $params->{'pattern'} // $key;
             my $handler    = $params->{'handler'};
             my $transforms = $params->{'transforms'} // [];
 

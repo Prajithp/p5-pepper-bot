@@ -9,6 +9,11 @@ sub trim {
    return $s;
 }
 
+sub wrap_text {
+    return sprintf("```%s```", $_[0])
+}   
+
+
 sub get_system_binary {
     my $bin = shift;
   

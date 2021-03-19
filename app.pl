@@ -2,30 +2,41 @@
 
 BEGIN { unshift @INC, './lib/' };
 
-use Mojolicious::Lite;
+use Mojolicious::Lite -async_await;
 use Pepper;
+use Syntax::Keyword::Try;
 
-helper 'dump_request' => sub {
-    my ( $self, $request ) = @_;
-    app->log->debug( app->dumper($request) );
-};
+app->config(hypnotoad => {listen => ['http://*:3000'], workers => 4});
+
+
+plugin 'DefaultHelpers';
+plugin 'Minion' => { SQLite => 'sqlite:queue.db' };
+plugin 'Minion::Admin';
+plugin 'Minion::Starter' => { debug => 1, spawn => 2 };
+
 
 helper 'pepper' => sub {
-    state $pepper = Pepper->new(log => $_[0]->app->log);
+    state $pepper = Pepper->new(log => app->log);
 };
 
-any '/handler' => sub {
+app->minion->add_task(process_message => sub {
+    my ($job, $message) = @_;
+    my $r = app->pepper->process($message);
+
+    return $job;
+});
+
+any '/handler' => async sub {
     my $self = shift;
     my $body = $self->req->json;
 
-    my $message = $body->{'message'};
-    my $result  = $self->pepper->process($message);
-    
-    my $response = {};
-    if (defined $result && !ref $result) {
-        $response->{'text'} = $result;
-    }
-    $self->render(json => $response);
+    my $message = $body->{'message'} // {};
+
+    $self->minion->enqueue(
+	'process_message', [$message]
+    );
+
+    $self->render(json => {});
 };
 
 app->start;

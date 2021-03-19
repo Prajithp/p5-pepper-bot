@@ -9,6 +9,8 @@ use Pepper::Service::Request;
 use Pepper::Service::Message;
 use Pepper::Registry;
 use Pepper::Util;
+use Data::Dumper;
+use Syntax::Keyword::Try;
 
 
 has bot => (
@@ -45,7 +47,7 @@ sub BUILD {
 }
 
 sub process {
-    my ( $self, $message ) = @_;
+    my ( $self, $message) = @_;
 
     my $raw_text = Pepper::Util::trim($message->{'argumentText'});
     
@@ -57,24 +59,43 @@ sub process {
         $text    = $2;
     }
 
-    $self->bot->context($context) if defined $context;
-
     my $space     = $message->{'space'}->{'name'};
     my $space_id  = (split(/\//, $space))[-1];
     my $thread    = $message->{'thread'}->{'name'};
     my $thread_id = (split(/\//, $thread))[-1];
-    
-    my $message_obj = Pepper::Service::Message->new(
-        log       => $self->log,
-        text      => $text, 
-        raw_text  => $raw_text,
-        sender    => $message->{'space'}->{'name'},
-        space_id  => $space_id,
-        thread_id => $thread_id,
-        request   => $self->request,
-    );
-    $self->log->info("Processing incomming message");
-    return $self->bot->process($message_obj);
+
+    my $log = $self->log->context(sprintf("[%s:%s]", $space_id, $thread_id));
+
+    $log->info("Setting context to $context");
+    $self->bot->context($context) if defined $context;
+
+    try {    
+        $log->info("Processing incomming message");
+        my $message = Pepper::Service::Message->new(
+            log       => $self->log,
+            text      => $text, 
+            raw_text  => $raw_text,
+            sender    => $message->{'space'}->{'name'},
+            space_id  => $space_id,
+            thread_id => $thread_id,
+            request   => $self->request,
+        );
+
+        my $r = $self->bot->process($text) or do {
+            $log->info("There's no response from bot processor");
+            return $message->reply({text => "There's no response from bot processor"});
+        };
+
+        $log->info("Sending response");
+        if (ref $r eq 'HASH') {
+            $message->reply($r);
+        }
+        $message->reply({text => $r});
+        
+    } catch {
+        my $e = $@;
+        $log->info("Failed to process message: " . $e);
+    }
 }
 
 1;

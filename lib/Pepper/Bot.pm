@@ -3,6 +3,7 @@ package Pepper::Bot;
 use strict;
 use warnings;
 use Data::Dumper;
+use Future::AsyncAwait;
 
 use base qw( Class::Accessor );
 
@@ -139,7 +140,7 @@ sub process_transform {
 
 sub process_pattern {
     @_ = get_right_object(@_);
-    my ( $self, $input, $message_obj ) = @_;
+    my ( $self, $input ) = @_;
 
     for my $context ( 'global', $self->{context}, 'fallback' ) {
         for my $pt ( @{ $self->{patterns}{ $self->{context} } } ) {
@@ -147,9 +148,8 @@ sub process_pattern {
             next if !$match;
 
             my $response;
-
             if ( $pt->{code} and ref $pt->{code} eq 'CODE' ) {
-                $response = $pt->{code}( $message_obj, $match );
+                $response = $pt->{code}( $match );
             }
 
             $response //= $pt->{response};
@@ -167,7 +167,6 @@ sub process_pattern {
         }
     }
 
-    warn Dumper $self->{patterns}{ $self->{context} };
     my @unknown_responses = (
         "Sorry, what's that?",
         "Wat?",
@@ -183,12 +182,11 @@ sub process_pattern {
 
 sub process {
     @_ = get_right_object(@_);
-    my ( $self, $message_obj ) = @_;
-
-    my $input = $message_obj->text;
+    my ( $self, $input ) = @_;
 
     my $tr  = $self->process_transform($input);
-    my $res = $self->process_pattern($tr, $message_obj);
+    my $res = $self->process_pattern($tr);
+
     return $res;
 }
 
