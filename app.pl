@@ -28,12 +28,12 @@ app->minion->add_task(process_message => sub {
 
 any '/handler' => async sub {
     my $self = shift;
-    my $body = $self->req->json;
 
-    my $message = $body->{'message'} // {};
+    my $body = $self->req->json;
+    my $message = $body->{'message'};
 
     $self->minion->enqueue(
-	'process_message', [$message]
+       'process_message', [$message]
     );
 
     $self->render(json => {});

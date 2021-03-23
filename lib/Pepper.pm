@@ -49,6 +49,8 @@ sub BUILD {
 sub process {
     my ( $self, $message) = @_;
 
+    return unless $message;
+
     my $raw_text = Pepper::Util::trim($message->{'argumentText'});
     
     my $text    = $raw_text;
