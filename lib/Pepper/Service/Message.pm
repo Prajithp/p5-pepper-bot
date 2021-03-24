@@ -3,7 +3,8 @@ package Pepper::Service::Message;
 use Moose;
 use namespace::autoclean;
 
-use constant URL => 'https://chat.googleapis.com/v1';
+use Pepper::Service::Event;
+use Pepper::Util;
 
 has request => (
     is       => 'ro',
@@ -13,60 +14,43 @@ has request => (
 );
 
 has log => (
-    is       => 'rw',
+    is       => 'ro',
     isa      => 'Mojo::Log',
     weak_ref => 1,
     required => 1,
 );
 
-has text => (
-    is       => 'rw',
-    isa      => 'Str',
-    required => 1
-);
+sub parse {
+    my ( $self, $payload ) = @_;
 
-has raw_text => (
-    is       => 'rw',
-    isa      => 'Str',
-    required => 1
-);
+    my $space    = $payload->{'space'}->{'name'};
+    my $space_id = ( split( /\//, $space ) )[-1];
+    my $args     = {
+        request  => $self->request,
+        log      => $self->log,
+        event    => $payload->{'event'},
+        sender   => $payload->{'user'}->{'displayName'},
+        type     => $payload->{'type'},
+        space_id => $space_id
+    };
 
-has sender => (
-    is       => 'rw',
-    isa      => 'Str',
-    required => 1
-);
+    if ( my $message = $payload->{'message'} ) {
+        my $text   = Pepper::Util::trim( $message->{'argumentText'} );
+        my $thread = $message->{'thread'}->{'name'};
 
-has space_id => (
-    is       => 'ro',
-    isa      => 'Str',
-    required => 1
-);
+        my $context;
+        if ( $text =~ m/^!([a-zA-Z]+)\s+([a-zA-Z\s\-_+0-9]+)/ ) {
+            $context = $1;
+            $text    = $2;
+        }
 
-has thread_id => (
-    is        => 'ro',
-    isa       => 'Str',
-    predicate => 'has_thread_id'
-);
-
-sub reply {
-    my ( $self, $message ) = @_;
-
-    my $url = sprintf( "%s/spaces/%s/messages", URL, $self->space_id );
-    if ( $self->has_thread_id ) {
-        my $thread =
-          sprintf( "spaces/%s/threads/%s", $self->space_id, $self->thread_id );
-        $message->{'thread'} = { 'name' => $thread };
+        $args->{'thread_id'} = ( split( /\//, $thread ) )[-1];
+        $args->{'text'}      = $text;
+        $args->{'context'}   = $context // "";
     }
 
-    my $tx = $self->request->build_tx(
-        method => 'POST',
-        url    => $url,
-        json   => $message
-    );
-    my $r = $self->request->dispatch($tx);
-
-    return $r;
+    my $event = Pepper::Service::Event->new($args);
+    return $event;
 }
 
 1;

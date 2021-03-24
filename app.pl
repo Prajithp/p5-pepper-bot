@@ -14,7 +14,6 @@ plugin 'Minion' => { SQLite => 'sqlite:queue.db' };
 plugin 'Minion::Admin';
 plugin 'Minion::Starter' => { debug => 1, spawn => 2 };
 
-
 helper 'pepper' => sub {
     state $pepper = Pepper->new(log => app->log);
 };
@@ -22,18 +21,17 @@ helper 'pepper' => sub {
 app->minion->add_task(process_message => sub {
     my ($job, $message) = @_;
     my $r = app->pepper->process($message);
-
     return $job;
 });
 
 any '/handler' => async sub {
     my $self = shift;
 
+    #app->log->debug(app->dumper($self->req->json));
+ 
     my $body = $self->req->json;
-    my $message = $body->{'message'};
-
     $self->minion->enqueue(
-       'process_message', [$message]
+       'process_message', [$body]
     );
 
     $self->render(json => {});

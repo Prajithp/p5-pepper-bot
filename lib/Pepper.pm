@@ -1,17 +1,14 @@
 package Pepper;
 
-use feature qw<say>;
 use Moose;
 use namespace::autoclean;
+
+use feature "switch";
 
 use Pepper::Bot;
 use Pepper::Service::Request;
 use Pepper::Service::Message;
 use Pepper::Registry;
-use Pepper::Util;
-use Data::Dumper;
-use Syntax::Keyword::Try;
-
 
 has bot => (
     is      => 'rw',
@@ -39,65 +36,67 @@ has log => (
     weak_ref => 1,
 );
 
-sub BUILD {
-    my $self = shift;
+has message => (
+    is      => 'rw',
+    isa     => 'Pepper::Service::Message',
+    lazy    => 1,
+    builder => '_build_message',
+);
 
-    my $registry = Pepper::Registry->new( bot => $self->bot );
+sub BUILD {
+    my $registry = Pepper::Registry->new( bot => $_[0]->bot );
     $registry->load_plugins;
+}
+
+sub _build_message {
+    return Pepper::Service::Message->new(
+        request => $_[0]->request,
+        log     => $_[0]->log
+    );
 }
 
 sub process {
     my ( $self, $message) = @_;
 
-    return unless $message;
+    my $event = $self->message->parse($message);
 
-    my $raw_text = Pepper::Util::trim($message->{'argumentText'});
-    
-    my $text    = $raw_text;
-    my $context = ""; 
+    $self->log->info("Processing message event");
 
-    if ($raw_text =~ m/^!([a-zA-Z]+)\s+([a-zA-Z\s\-_+0-9]+)/) {
-        $context = $1;
-        $text    = $2;
-    }
-
-    my $space     = $message->{'space'}->{'name'};
-    my $space_id  = (split(/\//, $space))[-1];
-    my $thread    = $message->{'thread'}->{'name'};
-    my $thread_id = (split(/\//, $thread))[-1];
-
-    my $log = $self->log->context(sprintf("[%s:%s]", $space_id, $thread_id));
-
-    $log->info("Setting context to $context");
-    $self->bot->context($context) if defined $context;
-
-    try {    
-        $log->info("Processing incomming message");
-        my $message = Pepper::Service::Message->new(
-            log       => $self->log,
-            text      => $text, 
-            raw_text  => $raw_text,
-            sender    => $message->{'space'}->{'name'},
-            space_id  => $space_id,
-            thread_id => $thread_id,
-            request   => $self->request,
-        );
-
-        my $r = $self->bot->process($text) or do {
-            $log->info("There's no response from bot processor");
-            return $message->reply({text => "There's no response from bot processor"});
-        };
-
-        $log->info("Sending response");
-        if (ref $r eq 'HASH') {
-            $message->reply($r);
+    given ($event->type) {
+        when ('MESSAGE') {
+            my $r =  $self->_on_message($event);
+            $self->log->info("Sending message response");
+            $event->reply($r);
         }
-        $message->reply({text => $r});
-        
-    } catch {
-        my $e = $@;
-        $log->info("Failed to process message: " . $e);
+        when ('ADDED_TO_SPACE') {
+            $self->log->info("Bot added to space");
+        }
+        when ('REMOVED_FROM_SPACE') {
+            $self->log->info("Bot removed from space");
+        }
+        default { 
+	    $self->log->info("Unknown event received from bot");
+        }  
     }
+
+}
+
+sub _on_message {
+    my ($self, $event) = @_;
+
+    my $text = $event->text;
+
+    $self->bot->context($event->context) if defined $event->context;
+    my $r = $self->bot->process($text);
+
+    unless (defined $r) {
+       $r = "There's no response from bot processor";
+    }
+    if (ref $r eq 'HASH') {
+        return $r;
+    }
+
+    return { text => $r };
 }
 
 1;
